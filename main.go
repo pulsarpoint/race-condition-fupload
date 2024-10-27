@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -12,7 +13,9 @@ import (
 	"time"
 )
 
-func FileUpload(url string, file *os.File) {
+type Headers map[string]string
+
+func FileUpload(url string, file *os.File, headers Headers) {
 	log.Printf("Uploading file to %s", url)
 
 	reader, writer := io.Pipe()
@@ -25,7 +28,7 @@ func FileUpload(url string, file *os.File) {
 		log.Printf("Starting goroutine")
 
 		// Create a form file part in the multipart writer
-		part, err := multipartWriter.CreateFormFile("file", "image.jpg")
+		part, err := multipartWriter.CreateFormFile("file", file.Name())
 		if err != nil {
 			log.Println("Error creating form file:", err)
 			return
@@ -47,7 +50,7 @@ func FileUpload(url string, file *os.File) {
 			}
 
 			// Simulate slow writing by adding a delay
-			time.Sleep(100 * time.Millisecond) // Adjust delay as needed
+			time.Sleep(100 * time.Millisecond)
 
 			// Write chunk to the multipart writer part
 			if _, err := part.Write(buffer[:n]); err != nil {
@@ -66,6 +69,11 @@ func FileUpload(url string, file *os.File) {
 		return
 	}
 	req.Header.Set("Content-Type", multipartWriter.FormDataContentType())
+	// Set headers
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
 	log.Printf("Created request with content type: %s", multipartWriter.FormDataContentType())
 
 	// Send the request
@@ -84,24 +92,43 @@ func FileUpload(url string, file *os.File) {
 	fmt.Println("Response Body:", string(respBody))
 }
 
+func LoadHeaders(path string) Headers {
+	jsonFile, err := os.Open(path)
+	if err != nil {
+		log.Println("Error opening headers file:", err)
+		return nil
+	}
+	defer jsonFile.Close()
+
+	var headers Headers
+	json.NewDecoder(jsonFile).Decode(&headers)
+	return headers
+}
+
 func main() {
 	// Replace with your target server URL
-	name := flag.String("url", "Url", "Upload URL")
-
-	url := "http://localhost:3000/upload"
-	file, err := os.Open("img.jpg")
+	url := flag.String("url", "http://localhost:3000/upload", "Upload URL")
+	file_input := flag.String("file", "img.jpg", "File to upload")
+	num_requests := flag.Int("num_requests", 30, "Number of requests to send")
+	headers_input := flag.String("headers", "headers.json", "Headers file")
+	flag.Parse()
+	file, err := os.Open(*file_input)
 	if err != nil {
 		log.Println("Error opening file:", err)
 		return
 	}
 	defer file.Close()
+	headers := Headers{}
+	if *headers_input != "" {
+		headers = LoadHeaders(*headers_input)
+	}
 
 	wg := sync.WaitGroup{}
-	for i := 0; i < 30; i++ {
+	for i := 0; i < *num_requests; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			FileUpload(url, file)
+			FileUpload(*url, file, headers)
 		}()
 	}
 	wg.Wait()

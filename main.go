@@ -109,7 +109,7 @@ func main() {
 	// Replace with your target server URL
 	url := flag.String("url", "http://localhost:3000/upload", "Upload URL")
 	file_input := flag.String("file", "img.jpg", "File to upload")
-	num_requests := flag.Int("num_requests", 30, "Number of requests to send")
+	threads := flag.Int("threads", 30, "Number of requests to send")
 	headers_input := flag.String("headers", "headers.json", "Headers file")
 	flag.Parse()
 	file, err := os.Open(*file_input)
@@ -124,7 +124,7 @@ func main() {
 	}
 
 	wg := sync.WaitGroup{}
-	for i := 0; i < *num_requests; i++ {
+	for i := 0; i < *threads; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
